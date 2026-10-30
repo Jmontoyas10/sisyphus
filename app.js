@@ -775,15 +775,17 @@ async function voiceNote(text){
     <div class="date" style="margin:-4px 0 12px">Para separar una nota larga en varias tareas y ponerlas en tu calendario, Claude necesita tu clave en este dispositivo.</div>
     <div class="row" style="flex-wrap:wrap"><button class="btn p grow" onclick="go('ajustes')">Pegar mi clave de Claude</button><button class="btn" onclick="captureTask(${escA(JSON.stringify(text))},{single:true})">Guardarla como una tarea</button></div>`);
   const list = claudeOn() ? await claudeSplitNote(text) : null;
+  if(list?.goals){ S.planText = text; return makePlan(); }   // goals: the planner builds habits, blocks and tasks
   if(!list || list.length <= 1) return captureTask(list?.[0] || text, {single: true});
-  draft = {notes: list};
+  draft = {notes: list, text};
   renderVoiceSheet();
 }
 function renderVoiceSheet(){
   const n = draft.notes.length;
   sheetHTML(`<span class="eyebrow">✦ Encontré ${n} tareas en tu nota</span><h3>Revísalas y las organizo</h3><div class="date" style="margin:-6px 0 8px">Cada una queda con su categoría, día y hora, y se crea como evento en tu calendario.</div>
     ${draft.notes.map((t, i) => `<div class="stp vn"><span class="n">${i+1}</span><input value="${escA(t)}" oninput="draft.notes[${i}]=this.value"><button class="ic" onclick="draft.notes.splice(${i},1);renderVoiceSheet()" aria-label="Quitar">×</button></div>`).join('')}
-    <div class="row" style="margin-top:14px"><button class="btn p grow" onclick="organizeAll()">${n === 1 ? 'Organizar la tarea' : `Organizar las ${n}`}</button><button class="btn" onclick="closeSheet()">Cancelar</button></div>`);
+    <div class="row" style="margin-top:14px"><button class="btn p grow" onclick="organizeAll()">${n === 1 ? 'Organizar la tarea' : `Organizar las ${n}`}</button><button class="btn" onclick="closeSheet()">Cancelar</button></div>
+    ${draft.text ? `<p class="date" style="margin:12px 0 0;text-align:center"><a href="#" class="lnk" onclick="event.preventDefault();S.planText=draft.text;makePlan()">✦ Son metas: arma un plan con hábitos y bloques</a></p>` : ''}`);
 }
 /* ---------- Planner: tell Claude your goals and how you want your week; it builds routine, habits, goals and tasks ---------- */
 const MIC_ICON = `<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>`;
