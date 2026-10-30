@@ -276,6 +276,15 @@ async function gTaskMoved(x){
     toast('Fecha actualizada en Google Tasks');
   }catch(e){ gFail(e); }
 }
+// A task deleted in the app: gone from Google Tasks, and its calendar event too
+async function gTaskDeleted(x){
+  const acc = primary(); if(!acc) return;
+  try{
+    if(x.gid) await api(acc, `${TASKS}/lists/${await listId(acc)}/tasks/${x.gid}`, {method: 'DELETE'});
+    if(x.eid){ await api(acc, `${CAL}/calendars/primary/events/${x.eid}`, {method: 'DELETE'}).catch(() => {}); await loadWeek(); render(); }
+    toast(x.eid ? 'Tarea y evento eliminados' : 'Tarea eliminada');
+  }catch(e){ gFail(e); }
+}
 async function gTaskToggled(x){
   const acc = primary(); if(!acc || !x.gid) return;
   try{
