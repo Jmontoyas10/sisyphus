@@ -124,6 +124,7 @@ function gRemove(i){
 }
 function gMakePrimary(i){
   G.accounts.unshift(G.accounts.splice(i, 1)[0]); saveAccounts();
+  gStore('pendingMain', {email: G.accounts[0].email, at: Date.now()});   // written to its Drive file once loaded
   G.listId = G.fileId = null; G.ready = false; gSync();
 }
 
@@ -150,6 +151,7 @@ async function gSync(){
   const acc = primary();
   if(!acc){ G.events = {}; G.status = ''; render(); return; }
   await Promise.all(G.accounts.filter(a => !tokenOk(a) && a.session).map(refreshAcc));
+  if(!G.mainResolved){ G.mainResolved = true; await resolveMain(); }
   if(!tokenOk(acc)){ G.status = 'La sesión de Google venció. Toca Reconectar.'; render(); return; }
   G.status = 'Sincronizando…'; render();
   try{
@@ -163,10 +165,32 @@ async function gSync(){
   render();
 }
 
+/* The main account is the person's choice, not the order accounts were connected on each device: the most recent
+   choice saved in any connected account's Drive file wins, so the phone and the computer always use the same one. */
+async function resolveMain(){
+  if(G.accounts.length < 2) return;
+  const q = encodeURIComponent(`name='${STATE_FILE}'`);
+  let best = null;
+  for(const acc of G.accounts.filter(tokenOk)){
+    try{
+      const f = (await api(acc, `${DRIVE}/files?spaces=appDataFolder&q=${q}&fields=files(id)`)).files[0];
+      if(!f) continue;
+      const c = (await api(acc, `${DRIVE}/files/${f.id}?alt=media`)).mainChoice;
+      if(c?.email === acc.email && (!best || c.at > best.at)) best = c;
+    }catch(e){}
+  }
+  const i = best ? G.accounts.findIndex(a => a.email === best.email) : -1;
+  if(i > 0){
+    G.accounts.unshift(G.accounts.splice(i, 1)[0]); saveAccounts();
+    G.listId = G.fileId = null; G.ready = false;
+    toast(`Cuenta principal: ${best.email}`);
+  }
+}
+
 /* ---------- Drive: routine, habits, goals, hours, stars, streak, focus and preferences ---------- */
 const STATE_V = 2;
 const emptyHabits = () => Object.fromEntries(HABITS.map(h => [h.id, []]));
-const snapshot = () => ({v: STATE_V, stars, routine, habits: HABITS, habit: {date: ymd(new Date()), log: habitLog}, habitHist, goals, budget, places, activity, counters, mailDone,
+const snapshot = () => ({v: STATE_V, stars, routine, habits: HABITS, habit: {date: ymd(new Date()), log: habitLog}, habitHist, goals, budget, places, activity, counters, mailDone, mainChoice: G.mainChoice,
   focus: {...FOCUS}, prefs: {...S}});
 function applyState(s){
   if(s.focus) Object.assign(FOCUS, s.focus);
@@ -174,7 +198,7 @@ function applyState(s){
   if(s.v !== STATE_V) s = {};    // data from the first version was sample data: start from zero, keep only preferences
   stars = typeof s.stars === "number" ? s.stars : 0;
   routine = s.routine || []; HABITS = s.habits || []; goals = s.goals || []; budget = s.budget || {};
-  places = s.places || []; activity = s.activity || []; mailDone = s.mailDone || []; counters = {done: 0, habits: 0, focus: 0, reviews: 0, lastReview: "", ...s.counters};
+  places = s.places || []; activity = s.activity || []; mailDone = s.mailDone || []; G.mainChoice = s.mainChoice || null; counters = {done: 0, habits: 0, focus: 0, reviews: 0, lastReview: "", ...s.counters};
   const cut = ymd(new Date(Date.now() - 21*864e5));
   habitHist = Object.fromEntries(Object.entries(s.habitHist || {}).filter(([d]) => d >= cut));
   const log = s.habit?.date === ymd(new Date()) ? s.habit.log || {} : {};
@@ -185,6 +209,8 @@ async function loadState(acc){
   const f = (await api(acc, `${DRIVE}/files?spaces=appDataFolder&q=${q}&fields=files(id)`)).files[0];
   if(f){ G.fileId = f.id; applyState(await api(acc, `${DRIVE}/files/${f.id}?alt=media`)); lastSaved = JSON.stringify(snapshot()); }
   else { G.fileId = null; applyState({}); lastSaved = null; }   // first time: real data starts from zero
+  const pending = gLoad('pendingMain', null);
+  if(pending?.email === acc.email){ G.mainChoice = pending; try{ localStorage.removeItem('sisyphus.pendingMain'); }catch(e){} }
   G.ready = true;
 }
 let lastSaved = null, saveTimer;
