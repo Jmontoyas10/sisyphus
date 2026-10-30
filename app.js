@@ -516,7 +516,7 @@ views.ajustes = () => {
   ${gOn()?`<div class="sec"><h3>Rutina</h3><span class="eyebrow">bloques de tiempo</span></div>
   <div class="glass card">${routine.length?[...routine].sort((x,y)=>toM(x.a)-toM(y.a)).map(b=>`<div class="set rt" onclick="blockSheet('${b.id}')" style="cursor:pointer"><span class="row" style="gap:10px"><i class="dot" style="background:${V[b.k][1]}"></i><span><b>${escA(b.n)}</b><span class="date">${b.a}–${b.b} · ${daysLabel(b.days)}</span></span></span><span class="muted">›</span></div>`).join('')
     :'<p class="date" style="margin:4px 0 10px">Crea tus bloques: por ejemplo "Trabajo profundo, 9:00–12:00, lunes a viernes". Claude ubicará cada tarea en el bloque que le corresponde.</p>'}
-    <button class="btn" style="width:100%;margin-top:10px" onclick="blockSheet()">+ Agregar bloque</button></div>
+    <div class="row" style="margin-top:10px;gap:8px"><button class="btn p grow" onclick="planSheet()">✦ Planificar con Claude</button><button class="btn grow" onclick="blockSheet()">+ Agregar bloque</button></div></div>
   <div class="sec"><h3>Hábitos</h3></div>
   <div class="glass card">${HABITS.map(h=>`<div class="set"><span class="row" style="gap:10px"><span style="font-size:20px">${escA(h.ic)}</span><span><b>${escA(h.n)}</b><span class="date">${V[h.v][0]}${h.types?.length?` · ${h.types.map(escA).join(', ')}`:''}</span></span></span><button class="ic gx" onclick="delHabit('${h.id}')" aria-label="Quitar hábito">×</button></div>`).join('')}
     <button class="btn" style="width:100%;margin-top:10px" onclick="habitSheet()">+ Agregar hábito</button></div>
@@ -547,11 +547,12 @@ function saveBlock(){
   const d = draft;
   if(!d.days.length) return toast('Elige al menos un día');
   if(endM(d.b) <= toM(d.a)) return toast('La hora de fin debe ser después del inicio');
-  const b = {id:d.id||uid('b'), a:d.a, b:d.b, n:d.n.trim()||V[d.k][0], k:d.k, days:d.days};
+  const b = {id:d.id||uid('b'), a:d.a, b:d.b, n:d.n.trim()||V[d.k][0], k:d.k, days:d.days, eid:d.eid};
   const i = routine.findIndex(x=>x.id===b.id); i>=0 ? routine[i]=b : routine.push(b);
   closeSheet(); toast('Bloque guardado'); render();
+  if(b.eid) gBlockEvent(b).then(render);   // its copy in Google Calendar follows the change
 }
-function delBlock(id){ routine = routine.filter(x=>x.id!==id); closeSheet(); toast('Bloque eliminado'); render(); }
+function delBlock(id){ const b = routine.find(x=>x.id===id); if(b?.eid) gBlockDelete(b); routine = routine.filter(x=>x.id!==id); closeSheet(); toast('Bloque eliminado'); render(); }
 function habitSheet(){
   draft = {ic:'⭐', n:'', v:'ejercicio', types:''};
   openSheet(`<span class="eyebrow">Nuevo hábito</span><h3>¿Qué quieres repetir?</h3>
@@ -583,7 +584,7 @@ function nowCard(order){
     <div class="row" style="margin-top:14px"><button class="btn w" onclick="go('enfoque')">Modo enfoque</button></div></div>`;
 }
 function setupCard(){
-  const steps=[[routine.length,'Define tus bloques de rutina',"go('ajustes')"],[HABITS.length,'Agrega tus hábitos',"habitSheet()"],[claudeOn(),'Pega tu clave de Claude',"go('ajustes')"],[tasks.length,'Escribe tu primera tarea abajo',"$('capIn').focus()"]];
+  const steps=[[routine.length,'✦ Cuéntale a Claude tus objetivos y tu semana',"planSheet()"],[HABITS.length,'Agrega tus hábitos',"habitSheet()"],[claudeOn(),'Pega tu clave de Claude',"go('ajustes')"],[tasks.length,'Escribe tu primera tarea abajo',"$('capIn').focus()"]];
   if(steps.every(s=>s[0])) return '';
   return `<div style="order:0" class="glass card ai"><span class="eyebrow">Primeros pasos</span>
     ${steps.map(([ok,n,fn])=>`<div class="set" style="cursor:pointer" onclick="${fn}"><span>${ok?'✅':'○'} ${n}</span>${ok?'':'<span class="muted">›</span>'}</div>`).join('')}</div>`;
@@ -731,21 +732,26 @@ let rec = null;
 if(!SR) $('micBtn').hidden = true;   // e.g. Firefox: the keyboard's own dictation still works
 function toggleVoice(){
   if(!gOn()) return toast('Conecta tu cuenta de Google para guardar tareas');
-  if(rec) return rec.stop();   // second tap ends the note
-  const input = $('capIn'), btn = $('micBtn'), before = input.value.trim();
+  dictate($('capIn'), $('micBtn'), t => { $('capIn').value = ''; voiceNote(t); });
+}
+// Speech to text into any field; a second tap on the button ends it, then onDone gets the full text
+function dictate(input, btn, onDone){
+  if(rec) return rec.stop();
+  const before = input.value.trim(), idle = input.placeholder;
   let heard = '';
   rec = new SR(); rec.lang = 'es-ES'; rec.interimResults = true; rec.continuous = true;
   btn.classList.add('on'); input.placeholder = 'Te escucho… toca el micrófono para terminar';
+  input.dispatchEvent(new Event('input'));
   rec.onresult = e => {
     let interim = '';
     for(let i = e.resultIndex; i < e.results.length; i++){ const r = e.results[i]; r.isFinal ? heard += r[0].transcript + ' ' : interim += r[0].transcript; }
-    input.value = [before, heard + interim].join(' ').trim();
+    input.value = [before, heard + interim].join(' ').trim(); input.dispatchEvent(new Event('input'));
   };
   rec.onerror = e => toast(/not-allowed/.test(e.error) ? 'Permite el micrófono en los ajustes del navegador' : e.error === 'no-speech' ? 'No te escuché. Intenta de nuevo.' : 'No pude usar el micrófono');
   rec.onend = () => {
-    rec = null; btn.classList.remove('on'); input.placeholder = 'Escribe una tarea… Claude la organiza';
+    rec = null; btn.classList.remove('on'); input.placeholder = idle;
     const t = input.value.trim();
-    if(t && heard.trim()){ input.value = ''; voiceNote(t); }
+    if(t && heard.trim()) onDone(t);
   };
   try{ rec.start(); }catch(e){ rec = null; btn.classList.remove('on'); toast('No pude usar el micrófono'); }
 }
@@ -762,6 +768,67 @@ function renderVoiceSheet(){
     ${draft.notes.map((t, i) => `<div class="stp vn"><span class="n">${i+1}</span><input value="${escA(t)}" oninput="draft.notes[${i}]=this.value"><button class="ic" onclick="draft.notes.splice(${i},1);renderVoiceSheet()" aria-label="Quitar">×</button></div>`).join('')}
     <div class="row" style="margin-top:14px"><button class="btn p grow" onclick="organizeAll()">${n === 1 ? 'Organizar la tarea' : `Organizar las ${n}`}</button><button class="btn" onclick="closeSheet()">Cancelar</button></div>`);
 }
+/* ---------- Planner: tell Claude your goals and how you want your week; it builds routine, habits, goals and tasks ---------- */
+const MIC_ICON = `<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>`;
+function planSheet(){
+  if(!gOn()) return toast('Conecta tu cuenta de Google primero');
+  if(!claudeOn()) return toast('Pega tu clave de Claude en Ajustes para planificar');
+  sheetHTML(`<span class="eyebrow">✦ Planifica tu semana con Claude</span><h3>Cuéntame tus objetivos y cómo quieres tu semana</h3>
+    <div class="date" style="margin:-4px 0 10px">Escribe o habla con naturalidad: tus metas, a qué hora trabajas o estudias, cuándo haces ejercicio, qué días quieres libres, horarios fijos… Claude arma tu rutina, hábitos, objetivos y las tareas de esta semana. Antes de guardar nada te muestra el plan.</div>
+    <div class="planbox"><textarea id="planIn" rows="8" placeholder="Ej.: Quiero terminar el semestre y lanzar mi proyecto. Trabajo de 9 a 13 y de 15 a 18 entre semana, clases lunes a jueves de 19 a 22. Gimnasio 3 veces por semana en la mañana. Leer 30 minutos antes de dormir. Fines de semana libres salvo el sábado en la mañana para el proyecto." oninput="S.planText=this.value">${escA(S.planText || '')}</textarea>
+      ${SR ? `<button type="button" id="planMic" class="mic" aria-label="Dictar" onclick="dictate($('planIn'), $('planMic'), t => { S.planText = t; })">${MIC_ICON}</button>` : ''}</div>
+    <div class="row" style="margin-top:14px"><button class="btn p grow" onclick="makePlan()">✦ Armar mi plan</button><button class="btn" onclick="closeSheet()">Cancelar</button></div>`);
+}
+async function makePlan(){
+  if(rec) rec.stop();
+  const text = ($('planIn')?.value || S.planText || '').trim();
+  if(text.length < 20) return toast('Cuéntame un poco más: tus objetivos y tus horarios');
+  S.planText = text;
+  sheetHTML(`<span class="eyebrow">✦ Claude</span><h3>Armando tu semana…</h3><div class="date">Repartiendo bloques, hábitos, objetivos y tareas. Toma unos segundos.</div>`);
+  const plan = await claudePlan(text);
+  if(!plan) return planSheet();
+  draft = {plan, use: {routine: plan.routine.length > 0, habits: plan.habits.length > 0, goals: plan.goals.length > 0, budget: plan.budget.length > 0, tasks: plan.tasks.length > 0},
+    replace: routine.length > 0, cal: true};
+  renderPlan();
+}
+const dayList = ds => daysLabel(ds.map(d => DAYS_FULL.indexOf(d)).filter(i => i >= 0).sort());
+function renderPlan(){
+  const {plan: p, use: u} = draft;
+  const sec = (key, title, items) => items.length ? `<div class="plansec"><label class="row"><input type="checkbox" ${u[key] ? 'checked' : ''} onchange="draft.use.${key}=this.checked"> <b>${title}</b></label><ul>${items.join('')}</ul></div>` : '';
+  sheetHTML(`<span class="eyebrow">✦ Tu plan</span><h3>Revísalo antes de aplicarlo</h3><p class="date" style="margin:-4px 0 10px">${escA(p.summary)}</p>
+    ${sec('routine', `Rutina · ${p.routine.length} bloques`, p.routine.map(b => `<li><i class="dot" style="background:${V[b.category][1]}"></i> ${escA(b.name)} · ${b.start}–${b.end} · ${dayList(b.days)}</li>`))}
+    ${sec('habits', `Hábitos · ${p.habits.length}`, p.habits.map(h => `<li>${escA(h.emoji)} ${escA(h.name)}${h.types.length ? ` <span class="date">(${h.types.map(escA).join(', ')})</span>` : ''}</li>`))}
+    ${sec('goals', `Objetivos · ${p.goals.length}`, p.goals.map(g => `<li>${escA(g.emoji)} ${escA(g.name)}${g.due ? ` · ${escA(g.due)}` : ''} <span class="date">· ${g.steps.length} pasos</span></li>`))}
+    ${sec('budget', 'Horas por categoría', p.budget.map(x => `<li><i class="dot" style="background:${V[x.category][1]}"></i> ${V[x.category][0]}: ${x.hours} h a la semana</li>`))}
+    ${sec('tasks', `Tareas de esta semana · ${p.tasks.length}`, p.tasks.map(t => `<li><i class="dot" style="background:${V[t.category][1]}"></i> ${t.day} ${t.time} · ${escA(t.title)}</li>`))}
+    <div class="plansec opts">
+      ${routine.length ? `<label class="row"><input type="checkbox" ${draft.replace ? 'checked' : ''} onchange="draft.replace=this.checked"> Reemplazar mi rutina actual (${routine.length} bloques)</label>` : ''}
+      <label class="row"><input type="checkbox" ${draft.cal ? 'checked' : ''} onchange="draft.cal=this.checked"> Poner también los bloques de rutina en Google Calendar</label>
+      <p class="date">Las tareas con hora siempre se crean como eventos en tu calendario.</p></div>
+    <div class="row" style="margin-top:12px"><button class="btn p grow" onclick="applyPlan()">Aplicar plan</button><button class="btn" onclick="planSheet()">Ajustar</button></div>`);
+}
+async function applyPlan(){
+  const {plan: p, use: u} = draft, replace = draft.replace, cal = draft.cal;
+  sheetHTML(`<span class="eyebrow">✦ Claude</span><h3>Aplicando tu plan…</h3><div class="date" id="vprog">Guardando en tu Google</div>`);
+  const step = msg => { if($('vprog')) $('vprog').textContent = msg; };
+  if(u.routine){
+    if(replace){ for(const b of routine) if(b.eid) await gBlockDelete(b); routine = []; }
+    const fresh = p.routine.map(b => ({id: uid('b'), n: b.name, k: b.category, a: b.start, b: b.end, days: b.days.map(d => DAYS_FULL.indexOf(d)).filter(i => i >= 0).sort()}))
+      .filter(b => b.days.length && /^\d\d:\d\d$/.test(b.a) && /^\d\d:\d\d$/.test(b.b) && endM(b.b) > toM(b.a));
+    routine.push(...fresh);
+    if(cal) for(const [i, b] of fresh.entries()){ step(`Bloques en tu calendario: ${i+1} de ${fresh.length}`); await gBlockEvent(b); }
+  }
+  if(u.habits) p.habits.forEach(h => { const x = {id: uid('h'), ic: h.emoji || '⭐', n: h.name, v: h.category, types: h.types}; HABITS.push(x); habitLog[x.id] = []; });
+  if(u.goals) p.goals.forEach(g => goals.push({id: uid('g'), ic: g.emoji || '🎯', n: g.name, v: g.category, due: g.due, steps: g.steps.map(s => ({s, ok: false}))}));
+  if(u.budget) p.budget.forEach(x => { budget[x.category] = x.hours; });
+  if(u.tasks) for(const [i, t] of p.tasks.entries()){
+    step(`Tareas: ${i+1} de ${p.tasks.length} · ${t.title}`);
+    const slot = `${t.day} · ${t.time} ${t.block}`, x = {t: t.title, v: t.category, s: t.size, p: t.priority, when: `${t.day} · ${t.time}`, day: t.day === 'Hoy' ? TODAY : DAYS_FULL.indexOf(t.day)};
+    tasks.push(x); await gTaskCreated(x, slot);
+  }
+  markActive(); closeSheet(); reward(50, 'Semana planificada'); render();
+}
+
 // Each task is classified and placed like a typed one; the person reviewed the list, so they are saved without one sheet per task
 async function organizeAll(){
   const list = draft.notes.map(s => s.trim()).filter(Boolean);
