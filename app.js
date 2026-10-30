@@ -843,6 +843,21 @@ async function organizeAll(){
   closeSheet(); toast(`${list.length} tareas organizadas`); render();
 }
 
+/* ---------- Updates: every publish writes a new build number; the app reloads itself when it sees one ---------- */
+const BUILD = document.querySelector('meta[name=build]')?.content || '0';
+if(/[?&]v=/.test(location.search)) history.replaceState(null, '', location.pathname + location.hash);
+async function checkUpdate(){
+  if(BUILD === '0' || rec || $('sheet').classList.contains('on')) return;   // never interrupt something in progress
+  try{
+    const v = (await (await fetch(`version.txt?t=${Date.now()}`, {cache: 'no-store'})).text()).trim();
+    if(!/^\d+$/.test(v) || v === BUILD || sessionStorage.getItem('sisyphus.reloadedFor') === v) return;
+    sessionStorage.setItem('sisyphus.reloadedFor', v);
+    location.replace(`${location.pathname}?v=${v}`);   // the ?v= skips the cached page
+  }catch(e){}
+}
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') checkUpdate(); });
+setTimeout(checkUpdate, 2500);
+
 // Tapping the current tab keeps the sub-view; another tab opens its first sub-view
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{const t=b.dataset.t;go(tabOf(view)===t?view:TABS[t][0]);});
 burst(); render();
