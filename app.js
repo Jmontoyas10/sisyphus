@@ -851,8 +851,11 @@ async function organizeAll(){
   const list = draft.notes.map(s => s.trim()).filter(Boolean);
   if(!list.length) return closeSheet();
   sheetHTML(`<span class="eyebrow">✦ Claude</span><h3>Organizando ${list.length} tareas…</h3><div class="date" id="vprog">0 de ${list.length}</div>`);
+  const taken = [];
   for(const [i, t] of list.entries()){
-    const g = await classifyTask(t);
+    const g = await classifyTask(t, taken);
+    const m = /^(\S+) · (\d\d):(\d\d)/.exec(g.slot);
+    if(m){ const a = +m[2]*60 + +m[3]; taken.push(`${m[1]} ${fmt(a)}-${fmt(a + ({S:30, M:60, L:120}[g.size] || 60))}`); }
     const x = {t, v:g.v, s:g.size, p:g.prio, when:g.slot.split(' ').slice(0,3).join(' '), day:g.slot.startsWith('Hoy') ? TODAY : 0};
     tasks.push(x); await gTaskCreated(x, g.slot);
     if($('vprog')) $('vprog').textContent = `${i+1} de ${list.length} · ${t}`;
