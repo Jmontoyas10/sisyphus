@@ -1,0 +1,15 @@
+{
+  "name": "Sisyphus",
+  "short_name": "Sisyphus",
+  "description": "Tareas y bloques de tiempo, organizados con Claude y Google.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#020D2D",
+  "theme_color": "#020D2D",
+  "icons": [
+    {"src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}
+  ]
+}
