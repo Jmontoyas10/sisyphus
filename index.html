@@ -5,7 +5,7 @@
 <!-- Security: the page may only load code from itself, Google sign-in and two pinned CDNs, and may only send data to Google, Anthropic and the session server -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; connect-src 'self' https://*.googleapis.com https://accounts.google.com https://api.anthropic.com https://cdn.jsdelivr.net https://*.workers.dev; img-src 'self' data: https://*.googleusercontent.com; style-src 'self' 'unsafe-inline' https://accounts.google.com; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<meta name="build" content="1793376424">
+<meta name="build" content="1793377260">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sisyphus">
@@ -121,6 +121,7 @@ h1{font-weight:500;font-size:40px;line-height:1;letter-spacing:-.04em;margin:24p
 .ev.tk small{color:rgba(255,255,255,.85)}
 .ev.gev{left:auto;right:6px;width:46%;background:rgba(14,30,66,.94);border:1px solid rgba(237,239,247,.45);z-index:3;padding:6px 10px}.ev.gev b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gtop{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}.gchip{font-size:12px;padding:5px 10px;border-radius:99px;background:rgba(237,239,247,.13);border:1px solid rgba(237,239,247,.4)}
+.btn.danger{border-color:rgba(214,21,5,.6);color:#ff8a7a}
 .set .btn{white-space:nowrap;flex:none}.set>.date{min-width:0}
 .set.acc{align-items:flex-start}.set.acc>.row{flex:none;margin-top:4px}.set.acc .who{display:flex;align-items:center;gap:10px;min-width:0;flex:1}.set.acc .who>span:last-child{min-width:0;flex:1}
 @media (max-width:480px){.set.acc .pill{font-size:0;width:10px;height:10px;padding:0;border-radius:50%}.set.acc .who b{font-size:13px}.set.acc .btn{padding:6px 10px;font-size:12px}}
@@ -358,15 +359,15 @@ nav button.fx.on{outline:2px solid #fff;outline-offset:2px}
 <div class="scrim" id="scrim" onclick="closeSheet()"></div>
 <div class="sheet" id="sheet"><div class="glass" id="sheetBody"></div></div>
 <div class="toast" id="toast"></div>
-<script src="google.js?v=1793376424"></script>
-<script src="claude.js?v=1793376424"></script>
+<script src="google.js?v=1793377260"></script>
+<script src="claude.js?v=1793377260"></script>
 <div class="reward" id="reward"><div class="box">
   <svg viewBox="-110 -110 220 220" id="burst"></svg>
   <div class="pts" id="rpts">+10 ⭐</div>
   <div class="msg" id="rmsg">¡Bien hecho!</div>
 </div></div>
 
-<script src="quotes.js?v=1793376424"></script>
-<script src="app.js?v=1793376424"></script>
+<script src="quotes.js?v=1793377260"></script>
+<script src="app.js?v=1793377260"></script>
 </body>
 </html>
