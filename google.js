@@ -170,7 +170,7 @@ const snapshot = () => ({v: STATE_V, stars, routine, habits: HABITS, habit: {dat
   focus: {...FOCUS}, prefs: {...S}});
 function applyState(s){
   if(s.focus) Object.assign(FOCUS, s.focus);
-  if(s.prefs) Object.assign(S, {quotes: s.prefs.quotes ?? S.quotes, sound: s.prefs.sound ?? S.sound, tz2: s.prefs.tz2 || "", profile: s.prefs.profile || ""});
+  if(s.prefs) Object.assign(S, {quotes: s.prefs.quotes ?? S.quotes, sound: s.prefs.sound ?? S.sound, tz2: s.prefs.tz2 || "", profile: s.prefs.profile || "", planText: s.prefs.planText || ""});
   if(s.v !== STATE_V) s = {};    // data from the first version was sample data: start from zero, keep only preferences
   stars = typeof s.stars === "number" ? s.stars : 0;
   routine = s.routine || []; HABITS = s.habits || []; goals = s.goals || []; budget = s.budget || {};
@@ -337,6 +337,30 @@ async function loadMail(){
   G.mail = out.sort((a, b) => b.date - a.date);
 }
 
+/* Routine blocks in Google Calendar (optional): one weekly recurring event per block, without reminders,
+   so the blocks also show up on the phone's calendar. The app keeps the event id to update or remove it. */
+const BYDAY = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+async function gBlockEvent(b){
+  const acc = primary(); if(!acc) return;
+  if(b.eid) await gBlockDelete(b);
+  const d = gDay(new Date()), offs = b.days.map(x => (x - TODAY + 7) % 7);
+  d.setDate(d.getDate() + Math.min(...offs));
+  const end = new Date(d); if(endM(b.b) === 1440) end.setDate(end.getDate() + 1);
+  try{
+    const ev = await api(acc, `${CAL}/calendars/primary/events`, {method: 'POST', body: JSON.stringify({
+      summary: b.n, description: `Bloque de rutina de Sisyphus · ${V[b.k][0]}`, colorId: GCOLOR[b.k], transparency: 'transparent',
+      start: {dateTime: `${ymd(d)}T${b.a}:00`, timeZone: mainTz()}, end: {dateTime: `${ymd(end)}T${endM(b.b) === 1440 ? '00:00' : b.b}:00`, timeZone: mainTz()},
+      recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${b.days.map(x => BYDAY[x]).join(',')}`],
+      reminders: {useDefault: false, overrides: []}, extendedProperties: {private: {sisyphus: 'block'}}})});
+    b.eid = ev.id;
+  }catch(e){ gFail(e); }
+}
+async function gBlockDelete(b){
+  const acc = primary(); if(!acc || !b.eid) return;
+  try{ await api(acc, `${CAL}/calendars/primary/events/${b.eid}`, {method: 'DELETE'}); }catch(e){}
+  delete b.eid;
+}
+
 /* ---------- Google Calendar: this week's events from every account ---------- */
 async function loadWeek(){
   const from = weekStart(), to = new Date(from); to.setDate(to.getDate() + 7);
@@ -349,7 +373,7 @@ async function loadWeek(){
         const r = await api(acc, `${CAL}/calendars/${encodeURIComponent(c.id)}/events?singleEvents=true&orderBy=startTime&maxResults=250` +
           `&timeMin=${encodeURIComponent(from.toISOString())}&timeMax=${encodeURIComponent(to.toISOString())}&fields=items(summary,start,end,status,extendedProperties)`);
         for(const e of r.items || []){
-          if(e.status === 'cancelled' || e.extendedProperties?.private?.sisyphus === 'focus') continue;
+          if(e.status === 'cancelled' || ['focus', 'block'].includes(e.extendedProperties?.private?.sisyphus)) continue;   // the app draws its own blocks
           const all = !!e.start.date, s = new Date(e.start.dateTime || e.start.date + 'T00:00'), en = new Date(e.end.dateTime || e.end.date + 'T00:00');
           const key = `${e.summary}|${s.getTime()}`; if(seen.has(key)) continue; seen.add(key);   // shared events show once
           (out[ymd(s)] ||= []).push({title: e.summary || '(Sin título)', s, e: en, all, acc: acc.email, cal: c.primary ? 'Principal' : c.summary, tz: c.timeZone || acc.tz});
