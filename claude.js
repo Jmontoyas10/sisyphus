@@ -65,7 +65,7 @@ async function classifyTask(t){
   const now = new Date(), hoy = now.toLocaleDateString('es-ES', {weekday: 'long', day: 'numeric', month: 'long'});
   const out = await claudeJSON(
     `Organizas las tareas de una persona que planifica su semana por bloques de tiempo por categoría y no quiere trabajar de noche. ` +
-    `Asigna cada tarea a la categoría correcta y al primer bloque libre que encaje. ` +
+    `Asigna cada tarea a la categoría correcta. Si la tarea menciona un día, una fecha, un momento ("el sábado", "este fin de semana", "mañana en la tarde") o una hora, prográmala exactamente ahí; si no, en el primer bloque libre que encaje. ` +
     `Categorías: trabajo (empleo, clientes, reuniones, entregas), universidad (estudios, clases, lecturas del curso), proyectos (proyectos personales, emprendimientos, escritura), ` +
     `ejercicio, lectura (lectura por gusto o para mantenerse al día), ocio (planes, descanso, fines de semana). ` +
     `Tamaño: S menos de 30 min, M 1-2 h, L medio bloque o más. Prioritaria solo si tiene fecha cercana o dice que es urgente. ` +
@@ -135,7 +135,7 @@ async function claudeSplitNote(text){
   const out = await claudeJSON(
     `Recibes una nota de voz transcrita automáticamente. Sepárala en tareas individuales y accionables, en español, empezando cada una con un verbo. ` +
     `Corrige errores evidentes del dictado, conserva en cada tarea el día, la hora o el plazo que se mencione y no inventes tareas. ` +
-    `Si la nota es una sola tarea, devuelve una sola. Máximo 10.`,
+    `Si la nota habla de un periodo ("este fin de semana", "la próxima semana"), repártelo: indica en cada tarea el día concreto que corresponda. Si la nota es una sola tarea, devuelve una sola. Máximo 10.`,
     text,
     {type: 'object', additionalProperties: false, required: ['tasks'], properties: {tasks: {type: 'array', items: {type: 'string'}}}});
   const list = (out?.tasks || []).map(s => s.trim()).filter(Boolean).slice(0, 10);
