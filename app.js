@@ -342,7 +342,7 @@ async function mailToTask(id){
   const m = G.mail.find(x=>x.id===id); if(!m) return;
   sheetHTML(`<span class="eyebrow">✦ Claude</span><h3>${escA(m.subject)}</h3><div class="date">Convirtiendo el correo en una tarea…</div>`);
   const title = await claudeMailTask(m) || `Responder a ${m.from}: ${m.subject}`;
-  captureTask(title, {mail:m.link, mailId:m.id});
+  captureTask(title, {mail:m.link, mailId:m.id, single:true});
 }
 
 /* ---------- Goals: created by the person, steps checked off by hand ---------- */
@@ -724,6 +724,7 @@ $('capture').onsubmit=e=>{e.preventDefault();const t=$('capIn').value.trim();if(
   $('capIn').value=''; captureTask(t);
 };
 async function captureTask(t, extra={}){
+  if(!extra.single && t.length > 60) return voiceNote(t);
   if(claudeOn()&&!$('sheet').classList.contains('on'))openSheet(`<span class="eyebrow">✦ Claude</span><h3>${escA(t)}</h3><div class="date">Organizando tu tarea…</div>`);
   const g=await classifyTask(t);
   const opt=(o,sel)=>Object.keys(o).map(k=>`<option value="${k}" ${k===sel?'selected':''}>${o[k]}</option>`).join('');
@@ -767,19 +768,20 @@ function dictate(input, btn, onDone){
   };
   try{ rec.start(); }catch(e){ rec = null; btn.classList.remove('on'); toast('No pude usar el micrófono'); }
 }
+// A note with one or many things to do: Claude splits it, then each task is categorized and placed with day and time
 async function voiceNote(text){
-  sheetHTML(`<span class="eyebrow">🎤 Nota de voz</span><h3>${escA(text)}</h3><div class="date">${claudeOn() ? 'Claude está separando las tareas…' : ''}</div>`);
+  sheetHTML(`<span class="eyebrow">✦ Tu nota</span><h3>${escA(text)}</h3><div class="date">${claudeOn() ? 'Claude está separando las tareas…' : ''}</div>`);
   if(!claudeOn() && text.length > 80) return sheetHTML(`<span class="eyebrow">🎤 Nota de voz</span><h3>${escA(text)}</h3>
     <div class="date" style="margin:-4px 0 12px">Para separar una nota larga en varias tareas y ponerlas en tu calendario, Claude necesita tu clave en este dispositivo.</div>
-    <div class="row" style="flex-wrap:wrap"><button class="btn p grow" onclick="go('ajustes')">Pegar mi clave de Claude</button><button class="btn" onclick="captureTask(${escA(JSON.stringify(text))})">Guardarla como una tarea</button></div>`);
+    <div class="row" style="flex-wrap:wrap"><button class="btn p grow" onclick="go('ajustes')">Pegar mi clave de Claude</button><button class="btn" onclick="captureTask(${escA(JSON.stringify(text))},{single:true})">Guardarla como una tarea</button></div>`);
   const list = claudeOn() ? await claudeSplitNote(text) : null;
-  if(!list || list.length <= 1) return captureTask(list?.[0] || text);
+  if(!list || list.length <= 1) return captureTask(list?.[0] || text, {single: true});
   draft = {notes: list};
   renderVoiceSheet();
 }
 function renderVoiceSheet(){
   const n = draft.notes.length;
-  sheetHTML(`<span class="eyebrow">🎤 Encontré ${n} tareas en tu nota</span><h3>Revísalas antes de organizarlas</h3>
+  sheetHTML(`<span class="eyebrow">✦ Encontré ${n} tareas en tu nota</span><h3>Revísalas y las organizo</h3><div class="date" style="margin:-6px 0 8px">Cada una queda con su categoría, día y hora, y se crea como evento en tu calendario.</div>
     ${draft.notes.map((t, i) => `<div class="stp vn"><span class="n">${i+1}</span><input value="${escA(t)}" oninput="draft.notes[${i}]=this.value"><button class="ic" onclick="draft.notes.splice(${i},1);renderVoiceSheet()" aria-label="Quitar">×</button></div>`).join('')}
     <div class="row" style="margin-top:14px"><button class="btn p grow" onclick="organizeAll()">${n === 1 ? 'Organizar la tarea' : `Organizar las ${n}`}</button><button class="btn" onclick="closeSheet()">Cancelar</button></div>`);
 }
@@ -855,7 +857,7 @@ async function organizeAll(){
     tasks.push(x); await gTaskCreated(x, g.slot);
     if($('vprog')) $('vprog').textContent = `${i+1} de ${list.length} · ${t}`;
   }
-  closeSheet(); toast(`${list.length} tareas organizadas`); render();
+  closeSheet(); toast(`${list.length} tareas organizadas y en tu calendario`); render();
 }
 
 /* ---------- Updates: every publish writes a new build number; the app reloads itself when it sees one ---------- */
