@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sisyphus · Privacidad</title>
+<link rel="icon" type="image/png" href="favicon.png?v=3">
+<style>
+:root{--bg:#020D2D;--text:#F2F2EE;--muted:rgba(205,206,200,.7);--edge:rgba(255,255,255,.14);--link:#FF9A52}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 "Helvetica Neue",Helvetica,Arial,sans-serif}
+main{max-width:680px;margin:0 auto;padding:40px 16px 64px}
+h1{font-size:30px;font-weight:500;margin:0 0 4px}h2{font-size:19px;font-weight:500;margin:32px 0 6px}
+p,li{color:var(--text)}.muted{color:var(--muted);font-size:14px}a{color:var(--link)}
+ul{padding-left:20px}section{border-top:1px solid var(--edge);margin-top:28px}
+</style>
+</head>
+<body>
+<main>
+<h1>Política de privacidad</h1>
+<p class="muted">Sisyphus · última actualización: 30 de octubre de 2026</p>
+
+<p>Sisyphus es un organizador personal de tareas y bloques de tiempo. Funciona dentro de tu navegador y usa tu propia cuenta de Google para guardar lo que haces. No tiene base de datos propia, no muestra publicidad y no vende ni comparte tus datos.</p>
+
+<section>
+<h2>Qué datos de Google usa y para qué</h2>
+<ul>
+  <li><b>Google Calendar:</b> lee tus eventos para mostrarte tu agenda y crea los eventos que tú confirmas (tareas con hora y avisos del temporizador de enfoque).</li>
+  <li><b>Google Tasks:</b> guarda tus tareas en una lista llamada "Sisyphus" dentro de tu cuenta.</li>
+  <li><b>Google Drive (carpeta privada de la app):</b> guarda tu configuración y progreso (rutina, hábitos, objetivos, lugares). Sisyphus no puede ver el resto de tu Drive.</li>
+  <li><b>Gmail (solo lectura, opcional):</b> si lo activas, muestra el remitente, el asunto y un extracto de tus correos no leídos recientes para que puedas convertirlos en tareas. Sisyphus no envía, no borra y no guarda tus correos.</li>
+  <li><b>Tu nombre, correo y foto de perfil:</b> para mostrar qué cuentas tienes conectadas.</li>
+</ul>
+<p>El uso que hace Sisyphus de la información recibida de las APIs de Google cumple la <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Política de Datos del Usuario de los Servicios de las APIs de Google</a>, incluidos los requisitos de uso limitado.</p>
+</section>
+
+<section>
+<h2>Dónde se guarda todo</h2>
+<ul>
+  <li><b>En tu cuenta de Google:</b> tareas, eventos y progreso.</li>
+  <li><b>En tu dispositivo:</b> la sesión y, si la usas, tu clave de Claude. Nunca se envían a otro lugar que no sea Google o Anthropic.</li>
+  <li><b>Servidor de sesión:</b> un pequeño servicio en Cloudflare renueva tu acceso a Google para que no tengas que iniciar sesión cada hora. No guarda datos: tu llave de renovación viaja cifrada y solo ese servicio puede leerla.</li>
+</ul>
+</section>
+
+<section>
+<h2>Inteligencia artificial (Claude)</h2>
+<p>Si agregas tu propia clave de Anthropic, Sisyphus envía a Claude solo lo necesario para cada acción: el texto de la tarea que escribes, lo que contaste en "Sobre ti", tus horas ocupadas, el asunto y extracto de un correo cuando lo conviertes en tarea, y los nombres de tus lugares guardados. Anthropic trata esos datos según su propia política de privacidad.</p>
+</section>
+
+<section>
+<h2>Cómo borrar tus datos o quitar el acceso</h2>
+<ul>
+  <li>Desconecta tus cuentas en <b>Ajustes</b> dentro de la app.</li>
+  <li>Quita el acceso en cualquier momento desde <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a>.</li>
+  <li>Borra la lista "Sisyphus" en Google Tasks y los datos de la app en Google Drive (Configuración → Administrar aplicaciones).</li>
+</ul>
+</section>
+
+<section>
+<h2>Contacto</h2>
+<p>Para preguntas sobre esta política, escribe al correo de asistencia que aparece en la pantalla de permisos de Google al conectar Sisyphus.</p>
+<p><a href="./">← Volver a Sisyphus</a></p>
+</section>
+</main>
+</body>
+</html>
