@@ -165,8 +165,20 @@ function renderSide(){
     <a class="${view==='ajustes'?'on':''}" onclick="go('ajustes')"><span>⚙️&nbsp; Ajustes</span></a></div>`;
 }
 function taskRow(x,i){return `<div class="glass task ${x.done?'done':''}" style="--c:${V[x.v][1]}"><span class="bar"></span>
-  <div class="body"><div class="t">${escA(x.t)}</div><div class="m">${x.p?'<span class="prio">● Prioritaria</span>':''}<span>${V[x.v][0]}</span><span>${escA(x.when)}</span><span>${x.s}</span>${x.mail?`<a class="lnk" href="${escA(x.mail)}" target="_blank" rel="noopener">✉️ correo</a>`:''}</div></div>
+  <div class="body" onclick="taskSheet(${i})" style="cursor:pointer"><div class="t">${escA(x.t)}</div><div class="m">${x.p?'<span class="prio">● Prioritaria</span>':''}<span>${V[x.v][0]}</span><span>${escA(x.when)}</span><span>${x.s}</span>${x.mail?`<a class="lnk" href="${escA(x.mail)}" target="_blank" rel="noopener">✉️ correo</a>`:''}</div></div>
   <button class="check" onclick="toggle(${i})" aria-label="Completar">${ICON_CHECK}</button></div>`;}
+// Tapping a task opens its details: mark it done or delete it (from Google Tasks and, if it has one, its calendar event)
+function taskSheet(i){
+  const x = tasks[i]; if(!x) return;
+  openSheet(`<span class="eyebrow">${V[x.v][0]} · ${escA(x.when)}${x.p ? ' · <span class="prio">Prioritaria</span>' : ''}</span><h3>${escA(x.t)}</h3>
+    ${x.eid ? '<div class="date" style="margin:-6px 0 10px">📅 Tiene un evento en tu calendario</div>' : ''}${x.mail ? `<p><a class="lnk" href="${escA(x.mail)}" target="_blank" rel="noopener">✉️ Abrir el correo original</a></p>` : ''}
+    <div class="row" style="margin-top:14px;flex-wrap:wrap"><button class="btn p grow" onclick="closeSheet();toggle(${i})">${x.done ? '↺ Marcar pendiente' : '✓ Marcar hecha'}</button>
+      <button class="btn danger" onclick="deleteTask(${i})">🗑 Eliminar</button><button class="btn" onclick="closeSheet()">Cerrar</button></div>`);
+}
+function deleteTask(i){
+  const x = tasks[i]; if(!x || !confirm(x.eid ? '¿Eliminar la tarea y su evento del calendario?' : '¿Eliminar la tarea?')) return;
+  tasks.splice(i, 1); closeSheet(); render(); gTaskDeleted(x);
+}
 
 /* ---------- Views ---------- */
 const views = {};
@@ -757,6 +769,9 @@ function dictate(input, btn, onDone){
 }
 async function voiceNote(text){
   sheetHTML(`<span class="eyebrow">🎤 Nota de voz</span><h3>${escA(text)}</h3><div class="date">${claudeOn() ? 'Claude está separando las tareas…' : ''}</div>`);
+  if(!claudeOn() && text.length > 80) return sheetHTML(`<span class="eyebrow">🎤 Nota de voz</span><h3>${escA(text)}</h3>
+    <div class="date" style="margin:-4px 0 12px">Para separar una nota larga en varias tareas y ponerlas en tu calendario, Claude necesita tu clave en este dispositivo.</div>
+    <div class="row" style="flex-wrap:wrap"><button class="btn p grow" onclick="go('ajustes')">Pegar mi clave de Claude</button><button class="btn" onclick="captureTask(${escA(JSON.stringify(text))})">Guardarla como una tarea</button></div>`);
   const list = claudeOn() ? await claudeSplitNote(text) : null;
   if(!list || list.length <= 1) return captureTask(list?.[0] || text);
   draft = {notes: list};
