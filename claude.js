@@ -60,7 +60,8 @@ const dayEnum = () => ['Hoy', ...DAYS_FULL];
 // What the person wrote about themselves in Ajustes; it lives in their private Drive file, never in this code
 const aboutYou = () => (S.profile || '').trim() ? `\n\nLo que la persona contó sobre sí misma:\n${S.profile.trim()}` : '';
 
-async function classifyTask(t){
+// taken: times already given to other tasks from the same note, so they don't land at the same hour
+async function classifyTask(t, taken = []){
   const base = guess(t);
   const now = new Date(), hoy = now.toLocaleDateString('es-ES', {weekday: 'long', day: 'numeric', month: 'long'});
   const out = await claudeJSON(
@@ -70,7 +71,7 @@ async function classifyTask(t){
     `ejercicio, lectura (lectura por gusto o para mantenerse al día), ocio (planes, descanso, fines de semana). ` +
     `Tamaño: S menos de 30 min, M 1-2 h, L medio bloque o más. Prioritaria solo si tiene fecha cercana o dice que es urgente. ` +
     `Elige "Hoy" solo si la hora propuesta aún no ha pasado. Responde en español.\n\nBloques de la semana:\n${routineText()}${aboutYou()}`,
-    `Ahora es ${hoy}, ${nowHM()}.${busyText()}\nTarea: ${t}`,
+    `Ahora es ${hoy}, ${nowHM()}.${busyText()}${taken.length ? `\nYa programado en esta misma nota (no lo pises): ${taken.join('; ')}` : ''}\nTarea: ${t}`,
     {type: 'object', additionalProperties: false, required: ['category', 'size', 'priority', 'day', 'time', 'block', 'why'],
      properties: {
        category: {type: 'string', enum: Object.keys(V)},
