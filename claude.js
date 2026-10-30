@@ -81,7 +81,7 @@ async function classifyTask(t){
        block: {type: 'string', description: 'Nombre del bloque elegido, p. ej. Trabajo profundo'},
        why: {type: 'string', description: 'Una frase corta explicando la elección'}}});
   if(!out) return {...base, by: 'rules'};
-  const time = /^\d{1,2}:\d{2}$/.test(out.time) ? out.time.padStart(5, '0') : '';
+  const time = /^\d{1,2}:\d{2}$/.test(out.time) ? out.time.padStart(5, '0') : '09:00';   // always a time, so the task becomes a calendar event
   return {v: out.category, size: out.size, prio: out.priority, slot: `${out.day} · ${time ? time + ' ' : ''}${out.block}`.trim(), why: out.why, by: 'claude'};
 }
 
