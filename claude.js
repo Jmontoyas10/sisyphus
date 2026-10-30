@@ -121,7 +121,7 @@ async function claudePlan(text){
     `Eres el planificador de Sisyphus, una app que organiza la semana por bloques de tiempo por categoría. A partir de lo que la persona cuenta sobre sus objetivos y cómo quiere repartir su tiempo, ` +
     `diseña su semana tipo y las primeras tareas. Reglas: respeta los horarios fijos y preferencias que mencione (clases, reuniones, horas de sueño, traslados, días libres); no pongas trabajo de noche salvo que lo pida; ` +
     `deja pausas para comer y descansar; los bloques no deben solaparse entre sí ni con sus horas ocupadas del calendario; usa nombres cortos y claros para los bloques. ` +
-    `Hábitos: solo los que mencione o se deduzcan claramente de sus objetivos, con tipos de sesión si aplican. Objetivos: los que cuente, cada uno con 2 a 5 pasos concretos. ` +
+    `Hábitos: los que mencione y los que hagan falta para cumplir sus objetivos (por ejemplo, una meta de lectura implica un hábito de lectura con su frecuencia), con tipos de sesión si aplican; cada hábito debe tener en la rutina su propio bloque recurrente (mismo nombre, su categoría, días y hora) para que quede en el calendario. Objetivos: los que cuente, cada uno con 2 a 5 pasos concretos. ` +
     `Horas por categoría: la meta semanal coherente con la rutina. Tareas: entre 3 y 12 acciones concretas para los próximos 7 días que hagan avanzar sus objetivos, ` +
     `cada una dentro de un bloque de su categoría (day, time y block deben coincidir con un bloque de la rutina); usa "Hoy" solo si la hora aún no ha pasado. ` +
     `Categorías: trabajo, universidad (estudios), proyectos (personales, emprendimientos, escritura), ejercicio, lectura, ocio. Responde en español. ` +
@@ -136,10 +136,12 @@ async function claudeSplitNote(text){
   const out = await claudeJSON(
     `Recibes una nota de voz transcrita automáticamente. Sepárala en tareas individuales y accionables, en español, empezando cada una con un verbo. ` +
     `Corrige errores evidentes del dictado, conserva en cada tarea el día, la hora o el plazo que se mencione y no inventes tareas. ` +
-    `Si la nota habla de un periodo ("este fin de semana", "la próxima semana"), repártelo: indica en cada tarea el día concreto que corresponda. Si la nota es una sola tarea, devuelve una sola. Máximo 10.`,
+    `Si la nota habla de un periodo ("este fin de semana", "la próxima semana"), repártelo: indica en cada tarea el día concreto que corresponda. Si la nota es una sola tarea, devuelve una sola. Máximo 10. ` +
+    `En "kind" responde "objetivos" si la persona habla sobre todo de metas, propósitos o hábitos a construir ("quiero leer 20 libros este año", "mi meta es correr una maratón", "quiero escribir todos los días"); responde "tareas" si son cosas concretas por hacer.`,
     text,
-    {type: 'object', additionalProperties: false, required: ['tasks'], properties: {tasks: {type: 'array', items: {type: 'string'}}}});
+    {type: 'object', additionalProperties: false, required: ['kind', 'tasks'], properties: {kind: {type: 'string', enum: ['tareas', 'objetivos']}, tasks: {type: 'array', items: {type: 'string'}}}});
   const list = (out?.tasks || []).map(s => s.trim()).filter(Boolean).slice(0, 10);
+  if(list.length) list.goals = out.kind === 'objetivos';
   return list.length ? list : null;
 }
 
