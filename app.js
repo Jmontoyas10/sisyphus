@@ -151,10 +151,10 @@ const sheetHTML = html => $('sheet').classList.contains('on') ? ($('sheetBody').
 const SECTIONS = [
   ['',[['inicio','🏠','Inicio'],['enfoque','◉','Enfoque']]],
   ['Agenda',[['calendario','📅','Día'],['semana','🗓️','Semana'],['fuera','🌍','Día fuera']]],
-  ['Planear',[['bandeja','📥','Bandeja'],['correo','✉️','Correos'],['objetivos','🧭','Objetivos'],['revision','✅','Revisión']]],
+  ['Planear',[['caja','⏱️','Timebox'],['bandeja','📥','Bandeja'],['correo','✉️','Correos'],['objetivos','🧭','Objetivos'],['revision','✅','Revisión']]],
   ['Progreso',[['insights','📊','Insights'],['logros','🏆','Logros']]]
 ];
-const TABS = {hoy:['inicio'],agenda:['calendario','semana','fuera'],enfoque:['enfoque'],planear:['bandeja','correo','objetivos','revision'],progreso:['insights','logros']};
+const TABS = {hoy:['inicio'],agenda:['calendario','semana','fuera'],enfoque:['enfoque'],planear:['caja','bandeja','correo','objetivos','revision'],progreso:['insights','logros']};
 const LABEL = Object.fromEntries(SECTIONS.flatMap(s=>s[1]).map(([v,,n])=>[v,n]));
 const tabOf = v => Object.keys(TABS).find(k=>TABS[k].includes(v));
 function go(v){sfx('tick');view=v;closeSheet();render();scrollTo(0,0);}
@@ -648,6 +648,7 @@ function render(){
   const page = !gOn() && !['ajustes','enfoque'].includes(view) ? views.bienvenida() : seg + views[view]();
   $('view').innerHTML = `<button class="avatar" onclick="go('ajustes')" aria-label="Ajustes">⚙️</button>` + page;
   renderSide();
+  if(!rec) $('capIn').placeholder = view==='caja' ? 'Dicta o escribe: todo va a tu caja' : 'Escribe una tarea… Claude la organiza';
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   gAfterRender();
 }
@@ -721,7 +722,7 @@ function guess(t){const s=t.toLowerCase();
   return {v,size,prio,slot:nextSlot(v)};}
 $('capture').onsubmit=e=>{e.preventDefault();const t=$('capIn').value.trim();if(!t)return;
   if(!gOn()){ toast('Conecta tu cuenta de Google para guardar tareas'); return; }
-  $('capIn').value=''; captureTask(t);
+  $('capIn').value=''; view==='caja' ? organizeTimebox(t) : captureTask(t);   // in Timebox everything goes to the box
 };
 async function captureTask(t, extra={}){
   if(!extra.single && t.length > 60) return voiceNote(t);
@@ -745,7 +746,7 @@ let rec = null;
 if(!SR) $('micBtn').hidden = true;   // e.g. Firefox: the keyboard's own dictation still works
 function toggleVoice(){
   if(!gOn()) return toast('Conecta tu cuenta de Google para guardar tareas');
-  dictate($('capIn'), $('micBtn'), t => { $('capIn').value = ''; voiceNote(t); });
+  dictate($('capIn'), $('micBtn'), t => { $('capIn').value = ''; view === 'caja' ? organizeTimebox(t) : voiceNote(t); });
 }
 // Speech to text into any field; a second tap on the button ends it, then onDone gets the full text
 function dictate(input, btn, onDone){
@@ -843,9 +844,120 @@ async function applyPlan(){
   if(u.tasks) for(const [i, t] of p.tasks.entries()){
     step(`Tareas: ${i+1} de ${p.tasks.length} · ${t.title}`);
     const slot = `${t.day} · ${t.time} ${t.block}`, x = {t: t.title, v: t.category, s: t.size, p: t.priority, when: `${t.day} · ${t.time}`, day: t.day === 'Hoy' ? TODAY : DAYS_FULL.indexOf(t.day)};
-    tasks.push(x); await gTaskCreated(x, slot);
+    tasks.push(x); await gTaskCreated(x, slot, {batch: true});
   }
+  if(u.tasks) await loadWeek();
   markActive(); closeSheet(); reward(50, 'Semana planificada'); render();
+}
+
+/* ---------- Timebox (method popularized by Harvard Business Review): dump everything by voice, Claude splits it into
+   tasks by category and gives each a tentative time box; the person adjusts and approves, then the events are created
+   in the main account's calendar. The box waits on this device until it is approved or emptied. ---------- */
+let tb = gLoad('timebox', null) || {text: '', goals: [], items: [], sel: ''};
+const saveTb = () => gStore('timebox', tb);
+const TB_START = 6*60, TB_END = 23*60, TB_PX = .9;
+const next7 = () => [...Array(7)].map((_, i) => { const d = gDay(new Date()); d.setDate(d.getDate() + i); return ymd(d); });
+const tbDate = s => new Date(s + 'T00:00');
+// Day name as slots and Claude use it: 'Hoy', 'Lun'…
+const tbSlotDay = s => s === ymd(new Date()) ? 'Hoy' : DAYS_FULL[(tbDate(s).getDay() + 6) % 7];
+const tbDay = (s, long) => { const i = next7().indexOf(s);
+  return i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : long ? tbDate(s).toLocaleDateString('es-ES', {weekday: 'long', day: 'numeric', month: 'short'}) : tbSlotDay(s); };
+const tbDur = m => m < 60 ? `${m} min` : `${Math.floor(m/60)} h${m % 60 ? ` ${m % 60}` : ''}`;
+function dayToYmd(day){ const d = gDay(new Date()); if(day !== 'Hoy') d.setDate(d.getDate() + ((DAYS_FULL.indexOf(day) - TODAY + 7) % 7 || 7)); return ymd(d); }
+const evMin = e => [e.s.getHours()*60 + e.s.getMinutes(), ymd(e.e) === ymd(e.s) ? e.e.getHours()*60 + e.e.getMinutes() : 1440];
+// A box that overlaps a calendar event or another box
+function tbClash(it){
+  if(!it.start) return false;
+  const a = toM(it.start), b = a + it.min;
+  return (G.events[it.date] || []).some(e => { if(e.all) return false; const [s, en] = evMin(e); return s < b && en > a; })
+      || tb.items.some(o => o !== it && o.date === it.date && o.start && toM(o.start) < b && toM(o.start) + o.min > a);
+}
+
+views.caja = () => {
+  const days = next7(), n = tb.items.length, timed = tb.items.filter(i => i.start).length;
+  const sel = days.includes(tb.sel) ? tb.sel : (tb.items.find(i => i.start)?.date || days[0]);
+  const y = m => (m - TB_START) * TB_PX, idx = tb.items.map((it, i) => [it, i]);
+  const voice = `<div class="glass card"><span class="eyebrow">1 · Vuelca todo</span>
+    <div class="planbox" style="margin-top:8px"><textarea id="tbIn" rows="${n ? 2 : 4}" placeholder="Ej.: Mañana terminar la propuesta del cliente, nadar una hora, estudiar el módulo 3 y en la tarde avanzar el portafolio. El viernes a las 20:00 cena con amigos." oninput="tb.text=this.value;saveTb()">${escA(tb.text)}</textarea>
+      ${SR ? `<button type="button" id="tbMic" class="mic" aria-label="Dictar" onclick="dictate($('tbIn'), $('tbMic'), t => { tb.text = t; organizeTimebox(t); })">${MIC_ICON}</button>` : ''}</div>
+    <div class="row" style="margin-top:10px"><button class="btn p grow" onclick="organizeTimebox()">${n ? '✦ Agregar a la caja' : '✦ Organizar mi día'}</button>${n ? `<button class="btn" onclick="clearTimebox()">Vaciar</button>` : ''}</div></div>`;
+  const top = `<div class="glass card"><span class="eyebrow">2 · Lo más importante</span>${tb.goals.length
+    ? `<ol class="tbgoals">${tb.goals.map((g, i) => `<li><span class="grow">${escA(g)}</span><button class="ic gx" onclick="tb.goals.splice(${i},1);saveTb();render()" aria-label="Quitar">×</button></li>`).join('')}</ol>`
+    : '<p class="date" style="margin:8px 0 0">Claude elige hasta 3 prioridades de lo que cuentes.</p>'}</div>`;
+  const cats = `<div class="glass card"><div class="row"><span class="eyebrow grow">Tareas por categoría</span>${n ? `<span class="date">${n}</span>` : ''}</div><div class="tbcats">${Object.entries(V).map(([k, [name, c]]) => {
+    const list = idx.filter(([it]) => it.v === k);
+    return `<div class="tbcat ${list.length ? '' : 'off'}" style="--c:${c}"><div class="h"><i class="dot" style="background:${c}"></i>${name}<span>${list.length || ''}</span></div>${list.map(([it, i]) =>
+      `<button class="tbit ${it.p ? 'p' : ''}" onclick="tbEdit(${i})"><b>${escA(it.t)}</b><small>${it.start ? `${tbDay(it.date)} ${it.start}` : 'sin hora'} · ${tbDur(it.min)}${tbClash(it) ? ' · ⚠ choca' : ''}</small></button>`).join('')}</div>`; }).join('')}</div></div>`;
+  const tabs = `<div class="days tbdays">${days.map(d => { const c = tb.items.filter(i => i.date === d && i.start).length, dt = tbDate(d);
+    return `<button class="${d === sel ? 'on' : ''}" onclick="tb.sel='${d}';saveTb();render()">${d === days[0] ? 'Hoy' : DAYS_1[(dt.getDay() + 6) % 7]}<b>${dt.getDate()}</b>${c ? `<i>${c}</i>` : ''}</button>`; }).join('')}</div>`;
+  let g = `<div class="tbgrid" style="height:${y(TB_END) + 8}px">`;
+  for(let m = TB_START; m <= TB_END; m += 30) g += `<div class="tbl ${m % 60 ? 'half' : ''}" style="top:${y(m)}px">${m % 60 ? '' : `<span>${fmt(m)}</span>`}</div>`;
+  g += dayBlocks((tbDate(sel).getDay() + 6) % 7).map(([a, b, nm, k]) => { const s = Math.max(toM(a), TB_START), e = Math.min(endM(b), TB_END);
+    return e > s ? `<div class="tbr" style="--c:${V[k][1]};top:${y(s)}px;height:${y(e) - y(s)}px"><small>${escA(nm)}</small></div>` : ''; }).join('');
+  g += (G.events[sel] || []).filter(e => !e.all).map(e => { const [a, b] = evMin(e), s = Math.max(a, TB_START), en = Math.min(b, TB_END);
+    return en > s ? `<div class="tbbusy" style="top:${y(s)}px;height:${Math.max(y(en) - y(s) - 2, 16)}px" title="${escA(e.acc)}"><b>${escA(e.title)}</b><small>${fmt(a)}–${fmt(b)}</small></div>` : ''; }).join('');
+  g += idx.filter(([it]) => it.date === sel && it.start).map(([it, i]) => { const a = toM(it.start), s = Math.max(a, TB_START);
+    return `<button class="tbbox ${tbClash(it) ? 'clash' : ''}" style="--c:${V[it.v][1]};top:${y(s)}px;height:${Math.max(y(a + it.min) - y(s) - 2, 20)}px" onclick="tbEdit(${i})"><b>${it.p ? '● ' : ''}${escA(it.t)}</b><small>${it.start}–${fmt(a + it.min)} · ${V[it.v][0]}</small></button>`; }).join('');
+  if(sel === days[0]){ const nm = nowMin(); if(nm > TB_START && nm < TB_END) g += `<div class="nowline" style="top:${y(nm)}px;left:40px"></div>`; }
+  g += '</div>';
+  const plan = `<div class="glass card"><div class="row" style="flex-wrap:wrap"><span class="eyebrow grow">3 · Tu día en cajas</span>${n
+      ? `<button class="btn p" onclick="approveTimebox()">✓ ${timed ? `Aprobar y crear ${timed} evento${timed === 1 ? '' : 's'}` : `Guardar ${n} tarea${n === 1 ? '' : 's'}`}</button>` : ''}</div>
+    ${tabs}${g}<p class="date" style="margin:4px 0 0">${n ? 'Toca una caja para cambiar su hora, duración o categoría. En gris, tus eventos de Google; las cajas que chocan tienen borde blanco.' : 'Cuando cuentes tu día, aquí aparece el orden tentativo junto a tus eventos de Google.'}</p></div>`;
+  return `<h1>Timebox</h1><div class="date">Cuéntame tu día: lo separo en tareas por categoría, les doy un orden tentativo y tú apruebas.</div>
+    <div class="tb"><div class="tbside">${voice}${top}${cats}</div><div class="tbmain">${plan}</div></div>`;
+};
+async function organizeTimebox(text){
+  if(rec) rec.stop();
+  text = String(text ?? $('tbIn')?.value ?? tb.text ?? '').trim();
+  if(!gOn()) return toast('Conecta tu cuenta de Google primero');
+  if(!claudeOn()) return toast('Pega tu clave de Claude en Ajustes para organizar tu día');
+  if(text.length < 4) return toast('Cuéntame qué tienes que hacer');
+  tb.text = text; saveTb();
+  sheetHTML(`<span class="eyebrow">✦ Claude</span><h3>Armando tus cajas…</h3><div class="date">${escA(text.length > 140 ? text.slice(0, 140) + '…' : text)}</div>`);
+  const out = await claudeTimebox(text, tb.items, tb.goals);
+  if(!out) return closeSheet();
+  const fresh = out.tasks.filter(t => t.title.trim()).map(t => ({id: uid('x'), t: t.title.trim(), v: t.category, p: t.priority, date: dayToYmd(t.day),
+    start: /^\d{1,2}:\d{2}$/.test(t.start) ? t.start.padStart(5, '0') : '', min: Math.min(480, Math.max(15, Math.round((t.minutes || 60) / 15) * 15))}));
+  if(!fresh.length){ closeSheet(); return toast('No encontré tareas en lo que dijiste'); }
+  tb.items.push(...fresh);
+  if(out.goals.length) tb.goals = out.goals.map(s => s.trim()).filter(Boolean).slice(0, 3);
+  tb.sel = fresh.find(i => i.start)?.date || tb.sel; tb.text = '';
+  saveTb(); closeSheet(); sfx('star'); toast(`${fresh.length} tarea${fresh.length === 1 ? '' : 's'} en la caja · revisa y aprueba`); render();
+}
+function clearTimebox(){ if(!confirm('¿Vaciar la caja? No se borra nada de tu calendario.')) return; tb = {text: '', goals: [], items: [], sel: ''}; saveTb(); render(); }
+function tbEdit(i){
+  const it = tb.items[i]; if(!it) return;
+  const durs = [...new Set([15, 30, 45, 60, 90, 120, 150, 180, 240, it.min])].sort((a, b) => a - b);
+  openSheet(`<span class="eyebrow">Caja de tiempo</span><input id="te" class="ttl" value="${escA(it.t)}" aria-label="Tarea">
+    <div class="field"><span>Categoría</span><select id="tv">${catOptions(it.v)}</select></div>
+    <div class="field"><span>Día</span><select id="td">${next7().map(d => `<option value="${d}" ${d === it.date ? 'selected' : ''}>${tbDay(d, true)}</option>`).join('')}</select></div>
+    <div class="field"><span>Hora</span><input id="ts" type="time" step="900" value="${it.start}"></div>
+    <div class="field"><span>Duración</span><select id="tm">${durs.map(m => `<option value="${m}" ${m === it.min ? 'selected' : ''}>${tbDur(m)}</option>`).join('')}</select></div>
+    <div class="field"><span>Prioritaria</span><input id="tp" type="checkbox" ${it.p ? 'checked' : ''}></div>
+    <p class="date" style="margin:8px 0 0">Sin hora queda solo como tarea, sin evento en el calendario.</p>
+    <div class="row" style="margin-top:14px;flex-wrap:wrap"><button class="btn p grow" onclick="tbSave(${i})">Guardar</button><button class="btn danger" onclick="tb.items.splice(${i},1);saveTb();closeSheet();render()">Quitar</button><button class="btn" onclick="closeSheet()">Cancelar</button></div>`);
+}
+function tbSave(i){
+  const it = tb.items[i];
+  Object.assign(it, {t: $('te').value.trim() || it.t, v: $('tv').value, date: $('td').value, start: $('ts').value || '', min: +$('tm').value, p: $('tp').checked});
+  tb.sel = it.date; saveTb(); closeSheet(); render();
+}
+// Approve: every box becomes an event in the main account's calendar (colour of its category) plus a Google Task
+async function approveTimebox(){
+  const list = tb.items.filter(it => it.t.trim()); if(!list.length) return;
+  const clash = list.filter(tbClash).length;
+  if(clash && !confirm(`${clash} caja${clash === 1 ? ' choca' : 's chocan'} con otro evento. ¿Crear igual?`)) return;
+  sheetHTML(`<span class="eyebrow">✦ Timebox</span><h3>Creando tus eventos…</h3><div class="date" id="vprog">0 de ${list.length}</div>`);
+  for(const [i, it] of list.entries()){
+    const x = {t: it.t, v: it.v, s: it.min <= 30 ? 'S' : it.min <= 120 ? 'M' : 'L', p: it.p, min: it.min, day: idxOfDate(tbDate(it.date)),
+      when: `${tbSlotDay(it.date)}${it.start ? ' · ' + it.start : ''}`, at: it.start ? new Date(`${it.date}T${it.start}`) : null};
+    tasks.push(x); await gTaskCreated(x, tbSlotDay(it.date), {batch: true});
+    if($('vprog')) $('vprog').textContent = `${i+1} de ${list.length} · ${it.t}`;
+  }
+  const timed = list.filter(it => it.start).length;
+  tb = {text: '', goals: [], items: [], sel: ''}; saveTb();
+  await loadWeek(); markActive(); closeSheet();
+  reward(30, timed ? `${timed} evento${timed === 1 ? '' : 's'} en tu calendario` : 'Tareas guardadas'); render();
 }
 
 // Each task is classified and placed like a typed one; the person reviewed the list, so they are saved without one sheet per task
@@ -859,10 +971,10 @@ async function organizeAll(){
     const m = /^(\S+) · (\d\d):(\d\d)/.exec(g.slot);
     if(m){ const a = +m[2]*60 + +m[3]; taken.push(`${m[1]} ${fmt(a)}-${fmt(a + ({S:30, M:60, L:120}[g.size] || 60))}`); }
     const x = {t, v:g.v, s:g.size, p:g.prio, when:g.slot.split(' ').slice(0,3).join(' '), day:g.slot.startsWith('Hoy') ? TODAY : 0};
-    tasks.push(x); await gTaskCreated(x, g.slot);
+    tasks.push(x); await gTaskCreated(x, g.slot, {batch: true});
     if($('vprog')) $('vprog').textContent = `${i+1} de ${list.length} · ${t}`;
   }
-  closeSheet(); toast(`${list.length} tareas organizadas y en tu calendario`); render();
+  await loadWeek(); closeSheet(); toast(`${list.length} tareas organizadas y en tu calendario`); render();
 }
 
 /* ---------- Updates: every publish writes a new build number; the app reloads itself when it sees one ---------- */
