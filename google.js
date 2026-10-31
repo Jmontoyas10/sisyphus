@@ -271,14 +271,16 @@ function slotDate(slot){
   return {d, time: false};
 }
 const wallTime = d => `${ymd(d)}T${d.toTimeString().slice(0,8)}`;
-// A new task in the app: Calendar event when it has a time, plus a Google Task with the due date
-async function gTaskCreated(x, slot){
+// A new task in the app: Calendar event when it has a time, plus a Google Task with the due date.
+// x.at (exact start) and x.min (minutes) come from the Timebox view; batch: the caller reloads the calendar once at the end
+async function gTaskCreated(x, slot, {batch = false} = {}){
   const acc = primary(); if(!acc) return;
-  const sd = slotDate(slot) || {d: dateOfIdx(x.day), time: false};
+  const sd = x.at ? {d: x.at, time: true} : slotDate(slot) || {d: dateOfIdx(x.day), time: false};
+  delete x.at;
   x.day = idxOfDate(sd.d);
   try{
     if(sd.time){
-      const end = new Date(sd.d.getTime() + ({S: 30, M: 60, L: 120}[x.s] || 60) * 6e4);
+      const end = new Date(sd.d.getTime() + (x.min || {S: 30, M: 60, L: 120}[x.s] || 60) * 6e4);
       const ev = await api(acc, `${CAL}/calendars/primary/events`, {method: 'POST', body: JSON.stringify({
         summary: x.t, description: `Creada desde Sisyphus · ${V[x.v][0]}`, colorId: GCOLOR[x.v],
         start: {dateTime: wallTime(sd.d), timeZone: mainTz()}, end: {dateTime: wallTime(end), timeZone: mainTz()},
@@ -288,6 +290,7 @@ async function gTaskCreated(x, slot){
     const t = await api(acc, `${TASKS}/lists/${await listId(acc)}/tasks`, {method: 'POST', body: JSON.stringify({
       title: x.t, notes: packNotes(x), due: `${ymd(sd.d)}T00:00:00.000Z`})});
     x.gid = t.id;
+    if(batch) return;
     toast(sd.time ? 'Guardada en Google Tasks y Calendar' : 'Guardada en Google Tasks');
     if(sd.time) await loadWeek();
     render();
@@ -396,9 +399,10 @@ async function gBlockDelete(b){
   delete b.eid;
 }
 
-/* ---------- Google Calendar: this week's events from every account ---------- */
+/* ---------- Google Calendar: this week's events from every account, and always the next 7 days (Timebox plans up to a week ahead) ---------- */
 async function loadWeek(){
   const from = weekStart(), to = new Date(from); to.setDate(to.getDate() + 7);
+  const ahead = gDay(new Date()); ahead.setDate(ahead.getDate() + 8); if(ahead > to) to.setTime(ahead.getTime());
   const out = {}, seen = new Set();
   for(const acc of G.accounts.filter(tokenOk)){
     try{
