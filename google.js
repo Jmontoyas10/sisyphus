@@ -74,7 +74,7 @@ function serverReturn(){
   const pending = gLoad('authNonce', null); try{ localStorage.removeItem('sisyphus.authNonce'); }catch(e){}
   let r; try{ r = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)))); }catch(e){ return; }
   if(!pending || r.nonce !== pending.nonce || Date.now() - pending.at > 15*60e3) return toast('No pude confirmar el inicio de sesión. Intenta de nuevo.');
-  if(r.error) return toast(r.error === 'access_denied' ? 'Cancelaste el permiso en Google.' : 'Google: ' + r.error);
+  if(r.error) return toast(r.error === 'access_denied' ? 'Cancelaste el permiso en Google.' : r.error === 'not_allowed' ? 'Esa cuenta de Google no tiene acceso a esta app.' : 'Google: ' + r.error);
   const acc = {email: r.email, name: r.name, pic: r.pic, token: r.access_token, exp: Date.now() + r.expires_in*1000, gmail: (r.scope || '').includes(GMAIL_SCOPE)};
   if(r.session){ acc.session = r.session; acc.sessionAt = Date.now(); }
   const i = G.accounts.findIndex(a => a.email === acc.email);
@@ -89,7 +89,8 @@ async function refreshAcc(acc){
     try{
       const r = await fetch(`${G.server}/refresh`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({session: acc.session})});
       const t = await r.json();
-      if(!r.ok){ if(r.status === 401){ delete acc.session; saveAccounts(); } return false; }   // revoked at Google: needs a new sign-in
+      // revoked at Google, or an account the server doesn't allow: no session any more
+      if(!r.ok){ if(r.status === 401 || t.error === 'not_allowed'){ delete acc.session; acc.exp = 0; saveAccounts(); } return false; }
       acc.token = t.access_token; acc.exp = Date.now() + t.expires_in*1000; saveAccounts();
       return true;
     }catch(e){ return false; }
