@@ -3,7 +3,7 @@
    Without a key, or if a call fails, the app falls back to the keyword rules in guess() and suggestStepsLocal(). */
 const CLAUDE = {
   model: 'claude-haiku-5-5',   // cheapest current model: the user asked to keep Claude around $1/month
-  sdk: 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.134.0/+esm',
+  sdk: './vendor/claude-sdk.js',   // @anthropic-ai/sdk 0.134.0, served with the app (no outside CDN)
   client: null, Anthropic: null
 };
 const claudeKey = () => gLoad('claudeKey', '');
