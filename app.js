@@ -165,7 +165,7 @@ function renderSide(){
     <a class="${view==='ajustes'?'on':''}" onclick="go('ajustes')"><span>⚙️&nbsp; Ajustes</span></a></div>`;
 }
 function taskRow(x,i){return `<div class="glass task ${x.done?'done':''}" style="--c:${V[x.v][1]}"><span class="bar"></span>
-  <div class="body" onclick="taskSheet(${i})" style="cursor:pointer"><div class="t">${escA(x.t)}</div><div class="m">${x.p?'<span class="prio">● Prioritaria</span>':''}<span>${V[x.v][0]}</span><span>${escA(x.when)}</span><span>${x.s}</span>${x.mail?`<a class="lnk" href="${escA(x.mail)}" target="_blank" rel="noopener">✉️ correo</a>`:''}</div></div>
+  <div class="body" onclick="taskSheet(${i})" style="cursor:pointer"><div class="t">${escA(x.t)}</div><div class="m">${x.p?'<span class="prio">● Prioritaria</span>':''}<span>${V[x.v][0]}</span><span>${escA(x.when)}</span><span>${escA(x.s)}</span>${x.mail?`<a class="lnk" href="${escA(x.mail)}" target="_blank" rel="noopener">✉️ correo</a>`:''}</div></div>
   <button class="check" onclick="toggle(${i})" aria-label="Completar">${ICON_CHECK}</button></div>`;}
 // Tapping a task opens its details: mark it done or delete it (from Google Tasks and, if it has one, its calendar event)
 function taskSheet(i){
@@ -315,7 +315,7 @@ views.enfoque = () => {
 
 views.bandeja = () => `<h1>Bandeja</h1><div class="date">Lo que Claude no pudo programar solo</div>
   ${inbox.length?inbox.map((x,i)=>`<div class="glass card" style="border-left:3px solid ${V[x.v][1]}"><b>${escA(x.t)}</b>
-    <div class="date" style="margin:4px 0 10px">${V[x.v][0]} · ${x.s} · ${escA(x.why)}</div>
+    <div class="date" style="margin:4px 0 10px">${V[x.v][0]} · ${escA(x.s)} · ${escA(x.why)}</div>
     <div class="row"><button class="btn p" onclick="inboxAccept(${i})">Programar</button><button class="btn" onclick="splitTask(inbox[${i}].t)">✂️ Dividir</button><button class="btn" onclick="inbox.splice(${i},1);render()">Descartar</button></div></div>`).join('')
   :emptyCard('Bandeja vacía. Aquí llegan las tareas que no caben en tus bloques.')}`;
 function inboxAccept(i){const x=inbox.splice(i,1)[0], slot=nextSlot(x.v);tasks.push(x);x.when=slot.split(' ').slice(0,3).join(' ');render();gTaskCreated(x,slot);}
@@ -465,7 +465,7 @@ views.fuera = () => {
 function toggleFav(id){ const p=places.find(x=>x.id===id); p.fav=!p.fav; render(); }
 async function loadJSZip(){
   if(window.JSZip) return window.JSZip;
-  await new Promise((ok,fail)=>{ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'; s.onload=ok; s.onerror=()=>fail(new Error('No pude cargar el lector de .zip')); document.head.appendChild(s); });
+  await new Promise((ok,fail)=>{ const s=document.createElement('script'); s.src='vendor/jszip.min.js'; s.onload=ok; s.onerror=()=>fail(new Error('No pude cargar el lector de .zip')); document.head.appendChild(s); });
   return window.JSZip;
 }
 // Reads Takeout's "Sitios guardados.json" (GeoJSON), from the .zip or on its own, and merges it with what is already saved
